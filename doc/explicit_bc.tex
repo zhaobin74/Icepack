@@ -1,0 +1,37 @@
+
+\documentclass[10pt,letterpaper,oneside]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
+\title{Proposed code changes to the BL99 solver in ICEPACK}
+\author{Bin Zhao}
+
+\begin{document}
+\section{Introduction}
+The NASA GMAO coupled model framework GEOS contains a surface module which computes energy balance in a semi-implicit way. The surface module has its own internal state and resides on an unstructured grid. Due to this constraint, coupling to CICE6/ICEPACK can not be done in the standard implicit manner where surface temperature and flux are updated together with the ice column temperatures. The BL99 thermo solver in CICE4/5 and ICEPACK still supports the explicit coupling via a run-time option \emph{calc\_Tsfc}.  However, in its current form, the BL99 explicit solver produces oscillating temperature and nonconvergent behavior under certain forcing conditions. The resultant imbalance between conductive flux and internal ice energy change is unacceptable for climate simulations. Here some approaches are sought to remedy the problematic solutions.   
+
+
+\section{Description of the problem in the current explicit coupling and a fix}
+
+The relevant equation for the energy balance of the top layer snow or ice  is in the form of (1) \newline
+\begin{equation} 
+\rho_{1}c_{1}\frac{\left( T^{m+1}_{1}-T^{m}_{1} \right)}{\Delta{t}}=\frac{1}{\Delta{h_{1}}} \left[ K^{*}_1  \left( T^{m+1}_{0}-T^{m+1}_{1} \right) - K_{2}  \left( T^{m+1}_{1}-T^{m+1}_{2} \right) \right] 
+\end{equation}
+\newline In the explicit coupling mode, (1) becomes\newline
+
+  \begin{equation} 
+  \rho_{1}c_{1}\frac{\left( T^{m+1}_{1}-T^{m}_{1} \right)}{\Delta{t}}=\frac{1}{\Delta{h_{1}}} \left[ F_{ct} - K_{2}  \left( T^{m+1}_{1}-T^{m+1}_{2} \right) \right]
+  \end{equation}
+   
+The first term on the r.h.s. of (2) is a form of 2nd-type (Neumann) boundary conditions for the 2nd-order heat diffusion equation. Although enforcing the flux at the top surface works well under most circumstances, occasionally the solver failed to converge when the top conductive flux is large and positive downward. In these cases, the top layer snow/ice temperature $T_{1}$ was near at melting point and the flux forces them to be above $0^{o}C$. Since $T_{1}$ has to be capped at $0^{o}C$, the solver failed to converge because the energy change is not consistent with the prescribed flux.     \newline
+
+There are a few measures in the literature that could prevent the problem from happening. One is to limit the effective conductivity such that the CFL condition is not violated; the other one is to limit conductive flux itself so the solution does not overshoot. Nevertheless, both methods suffer from inaccurate solutions in the final temperature and fluxes.      
+
+
+
+\section{Proposed changes to \textbf{icepack\_therm\_bl99.F90}}
+
+\end{document}
