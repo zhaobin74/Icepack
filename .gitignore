@@ -4,3 +4,8 @@
 # Ignore doc/build
 # these are stored in gh-pages orphan branch
 doc/build
+
+doc/*.log
+doc/*.gz
+doc/*.aux
+
