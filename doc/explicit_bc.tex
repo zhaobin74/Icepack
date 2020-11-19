@@ -28,7 +28,17 @@ The relevant equation for the energy balance of the top layer snow or ice  is in
    
 The first term on the r.h.s. of (2) is a form of 2nd-type (Neumann) boundary conditions for the 2nd-order heat diffusion equation. Although enforcing the flux at the top surface works well under most circumstances, occasionally the solver failed to converge when the top conductive flux is large and positive downward. In these cases, the top layer snow/ice temperature $T_{1}$ was near at melting point and the flux forces them to be above $0^{o}C$. Since $T_{1}$ has to be capped at $0^{o}C$, the solver failed to converge because the energy change is not consistent with the prescribed flux.     \newline
 
-There are a few measures in the literature that could prevent the problem from happening. One is to limit the effective conductivity such that the CFL condition is not violated; the other one is to limit conductive flux itself so the solution does not overshoot. Nevertheless, both methods suffer from inaccurate solutions in the final temperature and fluxes.      
+There are a few measures in the literature that could prevent the problem from happening. One is to limit the effective conductivity such that the CFL condition is not violated; the other one is to limit conductive flux itself so the solution does not overshoot. Nevertheless, both methods suffer from inaccurate temperature and fluxes relative to the implicit solver solution. 
+
+Instead of imposing $F_{ct}$ in (2), the 1st-type (Dirichlet) boundary condition can also be applied, in the form of (3)
+
+\begin{equation} 
+\rho_{1}c_{1}\frac{\left( T^{m+1}_{1}-T^{m}_{1} \right)}{\Delta{t}}=\frac{1}{\Delta{h_{1}}} \left[ K^{*}_1  \left( T^{fix}_{sf}-T^{m+1}_{1} \right) - K_{2}  \left( T^{m+1}_{1}-T^{m+1}_{2} \right) \right] 
+\end{equation}
+
+(3) is especially useful when surface module determines $T^{fix}_{sf}$ is at the melting point,  hence $T^{fix}_{sf} = 0$. In the case that surface is still cold,  $T^{fix}_{sf} < 0$ can still be prescribed. In both cases, $F_{ct}$ needs to be recomputed during iterations (which helps solver to converge). When surface is cold, the condition $F_{ct} = F_{surf}$ has to be respected and the difference  $F_{surf} - F_{ct}$ can be partitioned to ice-ocean heat flux to conserve energy; otherwise, the thermo solver proceeds as usual. 
+ 
+      
 
 
 
