@@ -5,11 +5,14 @@
 \usepackage{amsfonts}
 \usepackage{amssymb}
 \usepackage{graphicx}
+\usepackage{color}
+\usepackage{listings}
 \usepackage[left=2cm,right=2cm,top=2cm,bottom=2cm]{geometry}
 \title{Proposed code changes to the BL99 solver in ICEPACK}
 \author{Bin Zhao}
 
 \begin{document}
+\lstset{language=Fortran}  
 \section{Introduction}
 The NASA GMAO coupled model framework GEOS contains a surface module which computes energy balance in a semi-implicit way. The surface module has its own internal state and resides on an unstructured grid. Due to this constraint, coupling to CICE6/ICEPACK can not be done in the standard implicit manner where surface temperature and flux are updated together with the ice column temperatures. The BL99 thermo solver in CICE4/5 and ICEPACK still supports the explicit coupling via a run-time option \emph{calc\_Tsfc}.  However, in its current form, the BL99 explicit solver produces oscillating temperature and nonconvergent behavior under certain forcing conditions. The resultant imbalance between conductive flux and internal ice energy change is unacceptable for climate simulations. Here some approaches are sought to remedy the problematic solutions.   
 
@@ -42,6 +45,79 @@ Instead of imposing $F_{ct}$ in (2), the 1st-type (Dirichlet) boundary condition
 
 
 
-\section{Proposed changes to \textbf{icepack\_therm\_bl99.F90}}
+\section{Proposed changes to icepack\_therm\_bl99.F90}
+
+At the top level, we introduce the following parameters to facilitate implementing the new boundary condition.
+ 
+\begin{lstlisting}
+
+       integer (kind=int_kind),parameter :: &
+         DIRICHLET = 1,                                 &
+         NEUMANN   = 2      
+         
+      character (char_len)  :: &
+         top_bc  = 'flux' ! top boundary condition type in 
+                          ! explicit coupling mode (.calc_Tsfc = .false.)
+                          ! default is 'flux', indicating the standard Neumann 
+                          ! type BC where Fcond is prescribed throughout 
+                          ! 'mixed' is a combination of Neumann and Dirichlet type BC
+                          ! depending on the surface conditions:
+                          ! when surface is melting or surface is cold but the solver
+                          ! did not converge within 10 iterations, switch to Dirichlet
+                          ! otherwise, Neumann is used
+ 
+\end{lstlisting}
+
+Parameter $top\_bc$ is used to turn on or off the new boundary conditions. When it is '$flux$', the current
+Neumann-type BC is enforced, recovering the old behavior. Setting it to '$mixed$' will enable Dirichlet-type BCs under 2 conditions: 1) surface is melting or 2) surface is cold but the solver did not converge within 10 iterations.
+
+We introduce a few additional parameters into the interface of $get\_matrix\_elements\_know\_Tsfc$  subroutine
+
+\begin{lstlisting}
+ subroutine get_matrix_elements_know_Tsfc (nilyr, nslyr, &
+                                      l_snow,   Tbot,             &
+                                      Tin_init, Tsn_init,         &
+                                      kh,       Sswabs,           &
+                                      Iswabs,                     &
+                                      etai,     etas,             &
+                                      sbdiag,   diag,             &
+                                      spdiag,   rhs,              &
+                                      bnd_type, Tsf,              &
+                                      fcondtopn)
+                                      
+                                      
+    integer (kind=int_kind), dimension (icells), &
+         intent(in), optional ::                   &
+         bnd_type          ! top boundary condition type
+                           ! 1: Dirichlet 
+                           ! 2: Neumann (default)
+      
+    real (kind=dbl_kind), dimension (icells), intent(in),  &
+         optional :: &
+         Tsf             ! ice/snow top surface temp (deg C)   
+\end{lstlisting}
+
+In the iterative temperature solver section of subroutine $temperature\_changes$, a few checks are to be added to turn on Dirichlet BC via $bnd\_type$ when $top\_bc$ is set to '$mixed$' and the two conditions above are satisfied. The $fcondtopn$ will also need to be recomputed such that energy conservation check is self-consistent. 
+
+Finally, a modification to the top melt calculation in subroutine $thickness\_changes$ is also required. Currently the top melt is computed as below
+
+\begin{lstlisting}
+      wk1 = (fsurfn - fcondtopn) * dt
+      etop_mlt = max(wk1, c0)           ! etop_mlt > 0   
+\end{lstlisting}
+ 
+ When our Dirichlet BC is on and surface is cold, we still have  $(fsurfn - fcondtopn) > 0$. However, surface melting can only happen when $T\_sfc = 0$. So a conditional check is necessary here to make sure $etop\_mlt$ is zero if Dirichlet BC is on due to condition 2).
+ 
+ \section{Testing}
+  
+ The new Dirichlet BC in explicit coupling requires extensive testing to make sure it produces comparable sea ice and polar climate to implicit solver. This can be done in GEOS couple model framework which uses CICE4. The implicit coupling has been implemented and so the two approaches can be compared directly. \newline
+ 
+ Ideally the test can also be conducted in a stand-alone mode within ICEPACK. Depending on the availability, a small external interface module may need  to be built to run ICEPACK in its explicit coupling mode. 
+       
+ \section{Summary}
+
+
+The code change as proposed enables explicit coupling of CICE6/ICEPACK to climate models which maintains a surface energy balance module on its own grid. It achieves the goal without resorting to such measures as limiting effective conductivity or conductive fluxes. The resultant high fidelity in temperature and fluxes makes it a viable approach for more coupled models to adopt CICE6 as a component.
+           
 
 \end{document}
